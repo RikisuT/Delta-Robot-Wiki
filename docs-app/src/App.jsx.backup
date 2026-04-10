@@ -1,139 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Activity, ArrowRightLeft, Box, X, FileText, Sliders, Cpu, Database, Settings, ChevronDown, ChevronUp, Info, Palette, Layers, BookOpen } from 'lucide-react';
-import Plotly from 'plotly.js-dist-min';
-
-// ═══════════════════════════════════════════════════════════════
-//  KINEMATICS LEARNING COMPONENT
-// ═══════════════════════════════════════════════════════════════
-function KinematicsLearning() {
-  const [pos, setPos] = useState({ x: 0, y: 0, z: -150 });
-  const plotRef = useRef(null);
-  const robotConstants = { SB: 200, SP: 200, L: 200, ELL: 200, H: 32.5 };
-  
-  const solveIK = (x, y, z) => {
-    const tan30 = 1 / Math.sqrt(3), cos120 = -0.5, sin120 = Math.sqrt(3) / 2;
-    const calcAngleYZ = (x0, y0, z0) => {
-      const y1 = -0.5 * tan30 * robotConstants.SB;
-      y0 -= 0.5 * tan30 * robotConstants.SP;
-      const a = (x0**2 + y0**2 + z0**2 + robotConstants.L**2 - robotConstants.ELL**2 - y1**2) / (2 * z0);
-      const b = (y1 - y0) / z0;
-      const d = -((a + b * y1) ** 2) + robotConstants.L * (b * b * robotConstants.L + robotConstants.L);
-      if (d < 0) return null;
-      const yj = (y1 - a * b - Math.sqrt(d)) / (b * b + 1);
-      const zj = a + b * yj;
-      const theta = Math.atan(-zj / (y1 - yj)) + (yj > y1 ? Math.PI : 0);
-      return theta;
-    };
-    const t1 = calcAngleYZ(x, y, z);
-    if (t1 === null) return null;
-    const t2 = calcAngleYZ(x * cos120 + y * sin120, y * cos120 - x * sin120, z);
-    if (t2 === null) return null;
-    const t3 = calcAngleYZ(x * cos120 - y * sin120, y * cos120 + x * sin120, z);
-    if (t3 === null) return null;
-    return [t1, t2, t3].map(t => t * 180 / Math.PI);
-  };
-
-  const angles = solveIK(pos.x, pos.y, pos.z);
-  const reachable = angles !== null;
-
-  // Generate workspace for 3D visualization
-  useEffect(() => {
-    if (!plotRef.current) return;
-    
-    const X = [], Y = [], Z = [];
-    const step = 30;
-    for (let x = -80; x <= 80; x += step) {
-      const xRow = [], yRow = [], zRow = [];
-      for (let y = -80; y <= 80; y += step) {
-        let zReachable = null;
-        for (let z = -200; z <= -80; z += 20) {
-          if (solveIK(x, y, z) !== null) { zReachable = z; break; }
-        }
-        xRow.push(x);
-        yRow.push(y);
-        zRow.push(zReachable !== null ? zReachable : null);
-      }
-      X.push(xRow);
-      Y.push(yRow);
-      Z.push(zRow);
-    }
-    
-    const trace = { x: X, y: Y, z: Z, type: 'surface', colorscale: 'Viridis', showscale: true };
-    const layout = {
-      title: 'Robot Workspace (Reachable Region)',
-      scene: { xaxis: {title: 'X'}, yaxis: {title: 'Y'}, zaxis: {title: 'Z'} },
-      margin: {l:0, r:0, t:40, b:0},
-      paper_bgcolor: 'rgba(15,23,42,0.8)',
-      plot_bgcolor: 'rgba(30,41,59,0.5)',
-      font: {color: '#cbd5e1'}
-    };
-    Plotly.newPlot(plotRef.current, [trace], layout, {responsive: true});
-  }, []);
-
-  return (
-    <div className="h-full w-full flex flex-col bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 overflow-hidden p-6">
-      <h1 className="text-3xl font-black text-white mb-2 flex items-center gap-3"><BookOpen size={32} className="text-blue-400" /> Kinematics Lab</h1>
-      <p className="text-slate-400 text-sm mb-6">Interactive 3-DOF IK solver • Adjust X, Y, Z to see motor angles</p>
-      <div className="flex-1 grid grid-cols-2 gap-6 overflow-hidden">
-        <div className="flex flex-col gap-6 bg-slate-800/40 backdrop-blur p-6 rounded-2xl border border-slate-700/50">
-          <div>
-            <label className="block text-sm font-bold text-slate-300 mb-3">End-Effector Position (mm)</label>
-            <div className="space-y-4">
-              {[{k:'x', l:'X', min:'-100', max:'100'}, {k:'y', l:'Y', min:'-100', max:'100'}, {k:'z', l:'Z', min:'-250', max:'-100'}].map(({k, l, min, max}) => (
-                <div key={k}>
-                  <div className="flex justify-between mb-2"><span className="text-xs font-semibold text-slate-400">{l} Position</span>
-                    <span className="text-sm font-bold text-blue-300">{pos[k].toFixed(1)} mm</span></div>
-                  <input type="range" min={min} max={max} step="5" value={pos[k]} 
-                    onChange={(e) => setPos({...pos, [k]: parseFloat(e.target.value)})}
-                    className="w-full h-2 bg-slate-700 rounded-lg cursor-pointer" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="border-t border-slate-700/50 pt-6">
-            <label className="block text-sm font-bold text-slate-300 mb-3">Robot Geometry</label>
-            <div className="space-y-2 text-xs">
-              {[{l:'Base',p:'SB'}, {l:'Platform',p:'SP'}, {l:'Bicep',p:'L'}, {l:'Rod',p:'ELL'}, {l:'Rod Width',p:'H'}].map(({l,p}) => (
-                <div key={p} className="flex justify-between bg-slate-900/50 p-2 rounded">
-                  <span className="text-slate-400">{l}</span>
-                  <span className="text-blue-300 font-semibold">{robotConstants[p].toFixed(p === 'L' || p === 'ELL' ? 0 : 2)} mm</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-6 bg-slate-800/40 backdrop-blur p-6 rounded-2xl border border-slate-700/50">
-          <div>
-            <label className="block text-sm font-bold text-slate-300 mb-4">Joint Angles</label>
-            {reachable ? (
-              <div className="space-y-3">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="bg-gradient-to-r from-purple-900/40 to-blue-900/40 p-4 rounded-lg border border-purple-700/50">
-                    <div className="flex justify-between items-baseline mb-2"><span className="font-bold text-purple-300">Motor {i + 1}</span>
-                      <span className="text-2xl font-black text-purple-300">{angles[i].toFixed(1)}°</span></div>
-                    <div className="text-xs text-slate-400">{(angles[i] * Math.PI / 180).toFixed(4)} rad</div>
-                    <div className="w-full bg-slate-900/50 h-2 rounded mt-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-purple-500 to-blue-500 h-full" 
-                        style={{width: `${Math.max(0, Math.min(100, (angles[i] + 10) / 100 * 100))}%`}} /></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-red-900/30 border border-red-700/50 p-4 rounded-lg">
-                <p className="text-red-300 font-semibold">❌ Unreachable</p></div>
-            )}
-          </div>
-          <div className="border-t border-slate-700/50 pt-6">
-            <label className="block text-sm font-bold text-slate-300 mb-3">Method</label>
-            <div className="text-xs text-slate-300 space-y-2 bg-slate-900/30 p-3 rounded-lg">
-              <p><span className="font-semibold text-blue-300">IK:</span> Tangent Half-Angle Substitution</p>
-              <p><span className="font-semibold text-blue-300">Constraint:</span> E·cosθ + F·sinθ + G = 0</p></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { Activity, ArrowRightLeft, Box, X, FileText, Sliders, Cpu, Database, Settings, ChevronDown, ChevronUp, Info, Palette, Layers } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════
 //  SYSTEM DATA
@@ -364,7 +230,6 @@ function FlyoutPanel({ selectedId, onClose }) {
 //  MAIN APP COMPONENT
 // ═══════════════════════════════════════════════════════════════
 export default function App() {
-  const [activeTab, setActiveTab] = useState('arch');
   const [selectedId, setSelectedId] = useState(null);
   const [showHwSpecs, setShowHwSpecs] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
@@ -432,18 +297,10 @@ export default function App() {
   }, [selectedId]);
 
   return (
-    <div className="h-screen w-full bg-slate-950 font-sans text-slate-200 overflow-hidden relative flex flex-col">
-      {/* Tab Navigation */}
-      <div className="h-14 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700/50 flex items-center px-6 gap-2 flex-shrink-0 z-40 backdrop-blur-xl">
-        <button onClick={() => { setActiveTab('arch'); setSelectedId(null); }} className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'arch' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/50' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'}`}><Activity size={18} /> Architecture</button>
-        <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'learn' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/50' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'}`}><BookOpen size={18} /> Kinematics</button>
-      </div>
-      {/* Content */}
-      {activeTab === 'arch' ? (
-        <>
+    <div className="h-screen w-full bg-slate-950 font-sans text-slate-200 overflow-hidden relative">
       <div 
         ref={containerRef} 
-        className="flex-1 absolute inset-0 top-14 bg-slate-900 select-none"
+        className="absolute inset-0 bg-slate-900 select-none"
         onPointerDown={handlePointerDown} 
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp} 
@@ -687,11 +544,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-        </>
-      ) : (
-        <KinematicsLearning />
-      )}
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes flyIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
