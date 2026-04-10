@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 html, body, #root {
-  height: 100vh;
+  min-height: 100vh;
   width: 100vw;
   margin: 0;
   padding: 0;
   background-color: #020617; /* Slate 950 to match the dark theme */
-  overflow: hidden; /* Prevents scrollbars on the main window */
+  overflow-x: hidden;
 }
