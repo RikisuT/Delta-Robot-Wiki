@@ -279,7 +279,7 @@ function KinematicsLearning() {
         scene: {
           xaxis: { title: 'X (mm)', range: [-200, 200] },
           yaxis: { title: 'Y (mm)', range: [-200, 200] },
-          zaxis: { title: 'Z (mm)', range: [-300, 50] },
+          zaxis: { title: 'Z (mm)', range: [-450, 200] },
           uirevision: 'keep-camera',
           aspectmode: 'cube',
           camera: currentCamera || undefined
